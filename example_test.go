@@ -60,10 +60,6 @@ var (
 		MediaType: artifactspec.MediaTypeArtifactManifest,
 		Digest:    digest.FromBytes(exampleSignatureManifest),
 		Size:      int64(len(exampleSignatureManifest))}
-	exampleSignatureManifestDescriptorArtifactspec = ocispec.Descriptor{
-		MediaType: exampleSignatureManifestDescriptor.MediaType,
-		Digest:    exampleSignatureManifestDescriptor.Digest,
-		Size:      exampleSignatureManifestDescriptor.Size}
 )
 
 func pushBlob(ctx context.Context, mediaType string, blob []byte, target oras.Target) (desc ocispec.Descriptor, err error) {
@@ -145,7 +141,7 @@ func TestMain(m *testing.M) {
 			q := r.URL.Query()
 			var referrers []ocispec.Descriptor
 			if q.Get("digest") == exampleManifestDescriptor.Digest.String() {
-				referrers = []ocispec.Descriptor{exampleSignatureManifestDescriptorArtifactspec}
+				referrers = []ocispec.Descriptor{exampleSignatureManifestDescriptor}
 			} else if q.Get("digest") == exampleSignatureManifestDescriptor.Digest.String() {
 				referrers = []ocispec.Descriptor{}
 			}
