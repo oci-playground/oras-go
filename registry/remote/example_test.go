@@ -249,14 +249,10 @@ func ExampleRepository_Push() {
 	ctx := context.Background()
 
 	// 1. assemble a descriptor
-	content := []byte("Example layer content")
-	descriptor := ocispec.Descriptor{
-		MediaType: ocispec.MediaTypeImageLayer, // Set media type
-		Digest:    digest.FromBytes(content),   // Calculate digest
-		Size:      int64(len(content)),         // Include content size
-	}
+	layer := []byte("Example layer content")
+	descriptor := content.NewDescriptorFromBytes(ocispec.MediaTypeImageLayer, layer)
 	// 2. push the descriptor and blob content
-	err = repo.Push(ctx, descriptor, bytes.NewReader(content))
+	err = repo.Push(ctx, descriptor, bytes.NewReader(layer))
 	if err != nil {
 		panic(err)
 	}
@@ -749,13 +745,6 @@ func Example_pushAndTag() {
 	//   |                                                   |
 	//   +--------+ localhost:5000/example/registry +--------+
 
-	generateDescriptor := func(mediaType string, blob []byte) (desc ocispec.Descriptor) {
-		return ocispec.Descriptor{
-			MediaType: mediaType,
-			Digest:    digest.FromBytes(blob), // Calculate digest
-			Size:      int64(len(blob)),       // Include blob size
-		}
-	}
 	generateManifest := func(config ocispec.Descriptor, layers ...ocispec.Descriptor) ([]byte, error) {
 		content := ocispec.Manifest{
 			Config:    config,
@@ -764,17 +753,16 @@ func Example_pushAndTag() {
 		}
 		return json.Marshal(content)
 	}
-
 	// 1. assemble descriptors and manifest
 	layerBlob := []byte("Hello layer")
-	layerDesc := generateDescriptor(ocispec.MediaTypeImageLayer, layerBlob)
+	layerDesc := content.NewDescriptorFromBytes(ocispec.MediaTypeImageLayer, layerBlob)
 	configBlob := []byte("Hello config")
-	configDesc := generateDescriptor(ocispec.MediaTypeImageConfig, configBlob)
+	configDesc := content.NewDescriptorFromBytes(ocispec.MediaTypeImageConfig, configBlob)
 	manifestBlob, err := generateManifest(configDesc, layerDesc)
 	if err != nil {
 		panic(err)
 	}
-	manifestDesc := generateDescriptor(ocispec.MediaTypeImageManifest, manifestBlob)
+	manifestDesc := content.NewDescriptorFromBytes(ocispec.MediaTypeImageManifest, manifestBlob)
 
 	// 2. push and tag
 	err = repo.Push(ctx, layerDesc, bytes.NewReader(layerBlob))

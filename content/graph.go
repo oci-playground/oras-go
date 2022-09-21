@@ -74,7 +74,7 @@ func Successors(ctx context.Context, fetcher Fetcher, node ocispec.Descriptor) (
 			return nil, err
 		}
 		return index.Manifests, nil
-	case artifactspec.MediaTypeArtifactManifest:
+	case artifactspec.MediaTypeArtifactManifest: // TODO: deprecate
 		content, err := FetchAll(ctx, fetcher, node)
 		if err != nil {
 			return nil, err
