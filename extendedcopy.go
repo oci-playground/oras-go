@@ -24,6 +24,7 @@ import (
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/internal/copyutil"
 	"oras.land/oras-go/v2/internal/descriptor"
+	"oras.land/oras-go/v2/registry"
 )
 
 var (
@@ -178,11 +179,31 @@ func findRoots(ctx context.Context, storage content.ReadOnlyGraphStorage, node o
 // For performance consideration, when using both FilterArtifactType and
 // FilterAnnotation, it's recommended to call FilterArtifactType first.
 func (opts *ExtendedCopyGraphOptions) FilterAnnotation(key string, regex *regexp.Regexp) {
+	filter := func(predecessors []ocispec.Descriptor, filtered []ocispec.Descriptor) []ocispec.Descriptor {
+		for _, p := range predecessors {
+			if value, ok := p.Annotations[key]; ok && (regex == nil || regex.MatchString(value)) {
+				filtered = append(filtered, p)
+			}
+		}
+		return filtered
+	}
+
 	fp := opts.FindPredecessors
 	opts.FindPredecessors = func(ctx context.Context, src content.ReadOnlyGraphStorage, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 		var predecessors []ocispec.Descriptor
 		var err error
 		if fp == nil {
+			if rf, ok := src.(registry.ReferrerFinder); ok {
+				// if src is a ReferrerFinder, use Referrers() for possible memory saving
+				if err := rf.Referrers(ctx, desc, "", func(referrers []ocispec.Descriptor) error {
+					// for each page of the results, filter the referrers
+					predecessors = filter(referrers, predecessors)
+					return nil
+				}); err != nil {
+					return nil, err
+				}
+				return predecessors, nil
+			}
 			predecessors, err = src.Predecessors(ctx, desc)
 		} else {
 			predecessors, err = fp(ctx, src, desc)
@@ -191,12 +212,7 @@ func (opts *ExtendedCopyGraphOptions) FilterAnnotation(key string, regex *regexp
 			return nil, err
 		}
 		var filtered []ocispec.Descriptor
-		for _, p := range predecessors {
-			if value, ok := p.Annotations[key]; ok && (regex == nil || regex.MatchString(value)) {
-				filtered = append(filtered, p)
-			}
-		}
-		return filtered, nil
+		return filter(predecessors, filtered), nil
 	}
 }
 
@@ -209,11 +225,31 @@ func (opts *ExtendedCopyGraphOptions) FilterArtifactType(regex *regexp.Regexp) {
 	if regex == nil {
 		return
 	}
+	filter := func(predecessors []ocispec.Descriptor, filtered []ocispec.Descriptor) []ocispec.Descriptor {
+		for _, p := range predecessors {
+			if regex.MatchString(p.ArtifactType) {
+				filtered = append(filtered, p)
+			}
+		}
+		return filtered
+	}
+
 	fp := opts.FindPredecessors
 	opts.FindPredecessors = func(ctx context.Context, src content.ReadOnlyGraphStorage, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 		var predecessors []ocispec.Descriptor
 		var err error
 		if fp == nil {
+			if rf, ok := src.(registry.ReferrerFinder); ok {
+				// if src is a ReferrerFinder, use Referrers() for possible memory saving
+				if err := rf.Referrers(ctx, desc, "", func(referrers []ocispec.Descriptor) error {
+					// for each page of the results, filter the referrers
+					predecessors = filter(referrers, predecessors)
+					return nil
+				}); err != nil {
+					return nil, err
+				}
+				return predecessors, nil
+			}
 			predecessors, err = src.Predecessors(ctx, desc)
 		} else {
 			predecessors, err = fp(ctx, src, desc)
@@ -222,11 +258,6 @@ func (opts *ExtendedCopyGraphOptions) FilterArtifactType(regex *regexp.Regexp) {
 			return nil, err
 		}
 		var filtered []ocispec.Descriptor
-		for _, p := range predecessors {
-			if regex.MatchString(p.ArtifactType) {
-				filtered = append(filtered, p)
-			}
-		}
-		return filtered, nil
+		return filter(predecessors, filtered), nil
 	}
 }
