@@ -222,29 +222,17 @@ func (opts *ExtendedCopyGraphOptions) FilterAnnotation(key string, regex *regexp
 			// annotations of the corresponding manifests.
 			for i, p := range predecessors {
 				if p.Annotations == nil {
-					// Decode the manifest and check its annotations, if the
-					// annotations are not present in the descriptors.
+					// if the annotations are not present in the descriptors,
+					// fetch it from the manifest content.
 					switch p.MediaType {
 					case docker.MediaTypeManifest, ocispec.MediaTypeImageManifest,
 						docker.MediaTypeManifestList, ocispec.MediaTypeImageIndex,
 						ocispec.MediaTypeArtifactManifest:
-						if err = func() error {
-							rc, err := src.Fetch(ctx, p)
-							if err != nil {
-								return err
-							}
-							defer rc.Close()
-							var manifest struct {
-								Annotations map[string]string `json:"annotations"`
-							}
-							if err := json.NewDecoder(rc).Decode(&manifest); err != nil {
-								return err
-							}
-							predecessors[i].Annotations = manifest.Annotations
-							return nil
-						}(); err != nil {
+						annotations, err := fetchAnnotations(ctx, src, p)
+						if err != nil {
 							return nil, err
 						}
+						predecessors[i].Annotations = annotations
 					}
 				}
 			}
@@ -305,23 +293,13 @@ func (opts *ExtendedCopyGraphOptions) FilterArtifactType(regex *regexp.Regexp) {
 			// the artifact type of the corresponding manifests.
 			for i, p := range predecessors {
 				if p.ArtifactType == "" && p.MediaType == ocispec.MediaTypeArtifactManifest {
-					// Decode the manifest and check its artifact type, if the
-					// annotations are not present in the descriptors.
-					if err = func() error {
-						rc, err := src.Fetch(ctx, p)
-						if err != nil {
-							return err
-						}
-						defer rc.Close()
-						var manifest ocispec.Artifact
-						if err := json.NewDecoder(rc).Decode(&manifest); err != nil {
-							return err
-						}
-						predecessors[i].ArtifactType = manifest.ArtifactType
-						return nil
-					}(); err != nil {
+					// if the artifact type is not present in the descriptors,
+					// fetch it from the manifest content.
+					artifactType, err := fetchArtifactType(ctx, src, p)
+					if err != nil {
 						return nil, err
 					}
+					predecessors[i].ArtifactType = artifactType
 				}
 			}
 		}
@@ -330,4 +308,34 @@ func (opts *ExtendedCopyGraphOptions) FilterArtifactType(regex *regexp.Regexp) {
 		filtered = filter(filtered, predecessors)
 		return filtered, nil
 	}
+}
+
+// fetchAnnotations fetches the annotations of the manifest described by desc.
+func fetchAnnotations(ctx context.Context, src content.ReadOnlyGraphStorage, desc ocispec.Descriptor) (map[string]string, error) {
+	rc, err := src.Fetch(ctx, desc)
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	var manifest struct {
+		Annotations map[string]string `json:"annotations"`
+	}
+	if err := json.NewDecoder(rc).Decode(&manifest); err != nil {
+		return nil, err
+	}
+	return manifest.Annotations, nil
+}
+
+// fetchArtifactType fetches the artifact type of the manifest described by desc.
+func fetchArtifactType(ctx context.Context, src content.ReadOnlyGraphStorage, desc ocispec.Descriptor) (string, error) {
+	rc, err := src.Fetch(ctx, desc)
+	if err != nil {
+		return "", err
+	}
+	defer rc.Close()
+	var manifest ocispec.Artifact
+	if err := json.NewDecoder(rc).Decode(&manifest); err != nil {
+		return "", err
+	}
+	return manifest.ArtifactType, nil
 }
