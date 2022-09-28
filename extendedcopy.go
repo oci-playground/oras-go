@@ -292,7 +292,7 @@ func (opts *ExtendedCopyGraphOptions) FilterArtifactType(regex *regexp.Regexp) {
 			// However, the descriptors returned by Predecessors may not include
 			// the artifact type of the corresponding manifests.
 			for i, p := range predecessors {
-				if p.ArtifactType == "" && p.MediaType == ocispec.MediaTypeArtifactManifest {
+				if p.MediaType == ocispec.MediaTypeArtifactManifest && p.ArtifactType == "" {
 					// if the artifact type is not present in the descriptors,
 					// fetch it from the manifest content.
 					artifactType, err := fetchArtifactType(ctx, src, p)
